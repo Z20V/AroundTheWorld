@@ -1,0 +1,169 @@
+# Инструкция: подготовка локальной папки `libs` для three.js и globe.gl
+
+Ниже — пошаговая инструкция с командами для macOS / Linux / Windows и альтернативой без npm (скачивание с CDN). По завершении у вас будет папка `libs` с локальными модулями, и проект можно будет запустить через локальный HTTP‑сервер.
+
+---
+
+## Требования
+- Node.js + npm (рекомендуется) или доступ к curl/wget
+- Python 3 или утилита http-server (для запуска локального сервера)
+
+---
+
+## Рекомендуемый вариант (macOS / Linux) — с npm
+1. Создайте папку для библиотек:
+
+```bash
+mkdir -p libs
+```
+
+2. Установите пакеты (локально в проекте):
+
+```bash
+npm install three@0.154.0 globe.gl@2.30.1 three-globe@2.45.0 --no-audit --no-fund
+```
+
+3. Скопируйте модульные сборки в `./libs`:
+
+```bash
+cp node_modules/three/build/three.module.js ./libs/
+cp node_modules/globe.gl/dist/globe.gl.module.js ./libs/
+# опционально, если хотите локальные текстуры
+mkdir -p assets/img
+cp node_modules/three-globe/example/img/* ./assets/img/
+```
+
+4. Проверьте, что файлы появились:
+
+```bash
+ls -la libs
+ls -la assets/img   # если копировали текстуры
+```
+
+---
+
+## Вариант для Windows (PowerShell)
+1. Создайте папку:
+
+```powershell
+New-Item -ItemType Directory -Path .\libs -Force
+```
+
+2. Установите пакеты (PowerShell):
+
+```powershell
+npm install three@0.154.0 globe.gl@2.45.0 three-globe@2.45.0
+```
+
+3. Скопируйте файлы в `libs`:
+
+```powershell
+Copy-Item -Path .\node_modules\three\build\three.module.js -Destination .\libs\
+Copy-Item -Path .\node_modules\globe.gl\dist\globe.gl.module.js -Destination .\libs\
+# опционально: текстуры
+New-Item -ItemType Directory -Path .\assets\img -Force
+Copy-Item -Path .\node_modules\three-globe\example\img\* -Destination .\assets\img\
+```
+
+4. Проверьте:
+
+```powershell
+Get-ChildItem .\libs
+Get-ChildItem .\assets\img
+```
+
+---
+
+## Если у вас нет npm — скачать напрямую (curl / wget)
+
+```bash
+mkdir -p libs
+# three
+curl -L -o libs/three.module.js "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js"
+# globe.gl
+curl -L -o libs/globe.gl.module.js "https://cdn.jsdelivr.net/npm/globe.gl@2.30.1/dist/globe.gl.module.js"
+# опционально: текстуры (пример)
+mkdir -p assets/img
+curl -L -o assets/img/earth-dark.jpg "https://cdn.jsdelivr.net/npm/three-globe@2.25.1/example/img/earth-dark.jpg"
+curl -L -o assets/img/earth-topology.png "https://cdn.jsdelivr.net/npm/three-globe@2.25.1/example/img/earth-topology.png"
+curl -L -o assets/img/night-sky.png "https://cdn.jsdelivr.net/npm/three-globe@2.25.1/example/img/night-sky.png"
+```
+
+(На Windows можно использовать `Invoke-WebRequest -OutFile` в PowerShell.)
+
+---
+
+## Запуск локального HTTP‑сервера
+ES‑модули не работают через file:// — нужно использовать HTTP.
+
+- Python 3 (быстро):
+
+```bash
+python -m http.server 8000
+# или, если python3 нужно явно
+python3 -m http.server 8000
+```
+
+- npx http-server (удобно):
+
+```bash
+npx http-server ./ -p 8000
+```
+
+- Глобально (если предпочитаете):
+
+```bash
+npm install -g http-server
+http-server ./ -p 8000
+```
+
+Откройте в браузере: http://localhost:8000/ (или http://127.0.0.1:8000/your-file.html)
+
+---
+
+## Пример структуры проекта
+
+```text
+project-root/
+├─ index.html                  # ваш HTML-файл
+├─ libs/
+│  ├─ three.module.js
+│  └─ globe.gl.module.js
+├─ assets/
+│  └─ img/
+│     ├─ earth-dark.jpg
+│     ├─ earth-topology.png
+│     └─ night-sky.png
+└─ node_modules/               # если использовали npm
+```
+
+---
+
+## Проверка работоспособности
+1. Убедитесь, что в HTML скрипт импортирует локальные модули:
+
+```html
+<script type="module">
+  import * as THREE from './libs/three.module.js';
+  import Globe from './libs/globe.gl.module.js';
+  // ...
+</script>
+```
+
+2. Запустите локальный сервер (см. выше) и откройте страницу.
+3. В консоли браузера при ошибках смотрите пути (404) и версии — чаще всего причина в неправильном пути к файлу.
+
+---
+
+## Советы и замечания
+- Версии: старайтесь использовать совместимые версии three и globe.gl. В инструкции приведены проверенные сочетания (three r152 + globe.gl 2.30.x).
+- Текстуры можно хранить локально для оффлайн‑работы — просто поправьте `globeImageUrl(...)` на `./assets/img/earth-dark.jpg` и т.д.
+- Если есть ошибки вроде "module not found" — проверьте путь и заглавные/строчные буквы (Windows менее чувствителен, Unix — да).
+
+---
+
+Если хотите, могу:
+- сгенерировать точные команды для вашей ОС (скажи, какую используешь: macOS / Linux / Windows),
+- автоматически обновить HTML (в артефакте) и заменить CDN‑пути текстур на локальные пути `./assets/img/...`,
+- или упаковать полный набор (HTML + libs + assets) в ZIP-архив (подскажу команды).
+

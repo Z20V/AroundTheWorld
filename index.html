@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AroundTheWorld</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌍</text></svg>">
+  <style>
+    :root{ --bg:#0b1020; --panel:#ffffff; --muted:#64748b; --accent:#0ea5a4; --team1:#3b82f6; --team2:#ef4444; --team3:#10b981 }
+    html,body{ height:100%; margin:0; font-family:Inter, Roboto, Arial, sans-serif; background:var(--bg); color:#0f1724 }
+    .app{ display:flex; height:100vh; gap:16px; padding:16px; box-sizing:border-box }
+    #globe{ flex:1; min-height:320px; border-radius:12px; overflow:hidden; position:relative; background:#081124 }
+    #infoPanel{ width:360px; max-width:40%; background:linear-gradient(180deg,#fff,#f8fafc); border-radius:12px; padding:20px; box-shadow:0 6px 24px rgba(2,6,23,.4); display:flex; flex-direction:column; gap:12px }
+    #infoPanel h2{ margin:0 0 6px 0; font-size:18px }
+    .meta{ color:var(--muted); font-size:13px }
+    #countryInfo h3{ margin:0 0 6px 0 }
+    #countryInfo p{ margin:4px 0 }
+    .game-panel{ background:#f1f5f9; border-radius:8px; padding:12px; margin-top:12px }
+    .game-panel h4{ color:var(--accent); margin:0 0 8px 0 }
+    .team{ display:flex; align-items:center; gap:8px; margin-bottom:8px }
+    .team-color{ width:16px; height:16px; border-radius:50% }
+    .team1{ background:var(--team1) }
+    .team2{ background:var(--team2) }
+    .team3{ background:var(--team3) }
+    .game-btn{ background:var(--accent); color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; margin-top:8px }
+    .controls{ display:flex; gap:8px; margin-top:auto }
+    button{ background:var(--accent); color:white; border:none; padding:8px 10px; border-radius:8px; cursor:pointer }
+    button.secondary{ background:#e6eef0; color:#08363a }
+    #tooltip{ position:absolute; pointer-events:none; transform:translate(-50%,-120%); background:rgba(3,7,18,0.9); color:#fff; padding:6px 8px; border-radius:6px; font-size:13px; white-space:nowrap; display:none; z-index:10 }
+    .loader{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg, rgba(0,0,0,0.25), transparent); z-index:8 }
+    .spinner{ width:44px; height:44px; border-radius:50%; border:4px solid rgba(255,255,255,0.08); border-top-color:var(--accent); animation:spin 1s linear infinite }
+    .teams-panel{ position:fixed; top:16px; left:16px; background:white; padding:12px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:20 }
+    .quiz-modal{ position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:white; padding:20px; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.2); z-index:30; display:none; max-width:500px; width:80% }
+    .quiz-options{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:15px 0 }
+    .quiz-option{ padding:10px; border:2px solid #e2e8f0; border-radius:8px; cursor:pointer; text-align:center }
+    .quiz-option:hover{ background:#f1f5f9 }
+    .close-btn{ position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; cursor:pointer }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
+    @media (max-width:900px){ .app{ flex-direction:column } #infoPanel{ width:100%; max-width:none } .teams-panel{ top:auto; bottom:16px; left:16px; right:16px } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div id="globe" aria-label="Интерактивный глобус" role="region">
+      <div id="tooltip" role="status" aria-hidden="true"></div>
+      <div class="loader" id="loader"><div class="spinner" aria-hidden="true"></div></div>
+    </div>
+
+    <aside id="infoPanel" aria-live="polite">
+      <h2>Информация о стране</h2>
+      <div class="meta">Выберите страну на глобусе</div>
+      <div id="countryInfo">
+        <p>Нажмите на маркер, чтобы увидеть данные о стране и доступные игры.</p>
+      </div>
+      <div class="controls">
+        <button id="resetBtn" class="secondary" aria-label="Сбросить вид">Сбросить вид</button>
+        <button id="autoRotateBtn" aria-pressed="true">Остановить вращение</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="teams-panel" id="teamsPanel">
+    <h3>Командная игра</h3>
+    <div class="team">
+      <div class="team-color team1"></div>
+      <span>Команда 1: <span id="team1Score">0</span> очков</span>
+    </div>
+    <div class="team">
+      <div class="team-color team2"></div>
+      <span>Команда 2: <span id="team2Score">0</span> очков</span>
+    </div>
+    <div class="team">
+      <div class="team-color team3"></div>
+      <span>Команда 3: <span id="team3Score">0</span> очков</span>
+    </div>
+    <button id="assignTeamsBtn" class="game-btn">Назначить команды</button>
+  </div>
+
+  <div class="quiz-modal" id="quizModal">
+    <button class="close-btn" id="closeQuiz">&times;</button>
+    <h3 id="quizQuestion"></h3>
+    <div class="quiz-options" id="quizOptions"></div>
+    <div id="quizResult"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl@2.29.0/dist/globe.gl.min.js"></script>
+
+  <script>
+    window.addEventListener('load', function() {
+      const countries = [
+        { 
+          name: "Китай", capital: "Пекин", population: "1,4 млрд", area: "9,6 млн км²", 
+          lat: 35.8617, lng: 104.1954, size: 1.6,
+          games: [
+            {
+              type: "quiz",
+              title: "Викторина о Китае",
+              questions: [
+                {
+                  question: "Какая стена является самой длинной в мире?",
+                  options: ["Великая Китайская стена", "Стена Трои", "Берлинская стена", "Стена Плача"],
+                  answer: 0,
+                  points: 10
+                },
+                {
+                  question: "Какое животное является символом Китая?",
+                  options: ["Тигр", "Панда", "Дракон", "Обезьяна"],
+                  answer: 1,
+                  points: 8
+                }
+              ]
+            }
+          ]
+        },
+        { 
+          name: "США", capital: "Вашингтон", population: "331 млн", area: "9,8 млн км²", 
+          lat: 37.0902, lng: -95.7129, size: 1.4,
+          games: [
+            {
+              type: "quiz",
+              title: "Викторина о США",
+              questions: [
+                {
+                  question: "Сколько штатов в США?",
+                  options: ["48", "50", "52", "45"],
+                  answer: 1,
+                  points: 5
+                },
+                {
+                  question: "Кто был первым президентом США?",
+                  options: ["Томас Джефферсон", "Авраам Линкольн", "Джордж Вашингтон", "Барак Обама"],
+                  answer: 2,
+                  points: 10
+                }
+              ]
+            }
+          ]
+        },
+        { 
+          name: "Индия", capital: "Нью-Дели", population: "1,38 млрд", area: "3,3 млн км²", 
+          lat: 20.5937, lng: 78.9629, size: 1.6,
+          games: [
+            {
+              type: "quiz", 
+              title: "Викторина об Индии",
+              questions: [
+                {
+                  question: "Какая река считается священной в Индии?",
+                  options: ["Ганг", "Нил", "Амазонка", "Миссисипи"],
+                  answer: 0,
+                  points: 10
+                }
+              ]
+            }
+          ]
+        },
+        { 
+          name: "Бразилия", capital: "Бразилиа", population: "213 млн", area: "8,5 млн км²", 
+          lat: -14.2350, lng: -51.9253, size: 1.2,
+          games: [
+            {
+              type: "quiz",
+              title: "Викторина о Бразилии", 
+              questions: [
+                {
+                  question: "Какой карнавал самый известный в Бразилии?",
+                  options: ["Карнавал в Рио", "Карнавал в Сан-Паулу", "Карнавал в Салвадоре", "Карнавал в Ресифи"],
+                  answer: 0,
+                  points: 8
+                }
+              ]
+            }
+          ]
+        },
+        { 
+          name: "Россия", capital: "Москва", population: "146 млн", area: "17,1 млн км²", 
+          lat: 61.5240, lng: 105.3188, size: 1.8,
+          games: [
+            {
+              type: "quiz",
+              title: "Викторина о России",
+              questions: [
+                {
+                  question: "Какое озеро является самым глубоким в мире?",
+                  options: ["Байкал", "Каспийское море", "Ладожское озеро", "Онежское озеро"],
+                  answer: 0,
+                  points: 12
+                },
+                {
+                  question: "Какой город был столицей России до Москвы?",
+                  options: ["Санкт-Петербург", "Киев", "Новгород", "Владимир"],
+                  answer: 0,
+                  points: 10
+                }
+              ]
+            }
+          ]
+        }
+      ];
+
+      const gameState = {
+        teams: [
+          { id: 1, name: "Команда 1", score: 0, color: "#3b82f6" },
+          { id: 2, name: "Команда 2", score: 0, color: "#ef4444" },
+          { id: 3, name: "Команда 3", score: 0, color: "#10b981" }
+        ],
+        currentTeam: null,
+        completedGames: {}
+      };
+
+      const container = document.getElementById('globe');
+      const tooltip = document.getElementById('tooltip');
+      const loader = document.getElementById('loader');
+      const countryInfoEl = document.getElementById('countryInfo');
+      const quizModal = document.getElementById('quizModal');
+      const quizQuestion = document.getElementById('quizQuestion');
+      const quizOptions = document.getElementById('quizOptions');
+      const quizResult = document.getElementById('quizResult');
+      let currentCountry = null;
+      let currentGame = null;
+      let currentQuestionIndex = 0;
+
+      const texturePaths = {
+        globe: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg',
+        bump: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png',
+        bg: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/night-sky.png'
+      };
+
+      function initGlobe() {
+        try {
+          const world = Globe()
+            .globeImageUrl(texturePaths.globe)
+            .bumpImageUrl(texturePaths.bump)
+            .backgroundImageUrl(texturePaths.bg)
+            .showAtmosphere(true)
+            .atmosphereColor('#3a228a')
+            .pointsData(countries)
+            .pointLat(d => d.lat)
+            .pointLng(d => d.lng)
+            .pointAltitude(d => 0.01 + d.size * 0.002)
+            .pointColor(d => {
+              const completed = gameState.completedGames[d.name] || [];
+              return completed.length > 0 ? '#10b981' : '#ff6b6b';
+            })
+            .pointRadius(0.4)
+            .pointsTransitionDuration(300)
+            .pointLabel(d => `${d.name}\nСтолица: ${d.capital}`)
+            (container);
+
+          const renderer = world.renderer();
+          const maxRatio = Math.min(window.devicePixelRatio || 1, 2);
+          renderer.setPixelRatio(maxRatio);
+
+          const controls = world.controls();
+          if (controls) {
+            controls.enablePan = false;
+            controls.minDistance = 150;
+            controls.maxDistance = 800;
+            controls.rotateSpeed = 0.4;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.3;
+          }
+
+          const scene = world.scene();
+          const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+          const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+          dir.position.set(5, 3, 5);
+          scene.add(ambient, dir);
+
+          setTimeout(() => {
+            loader.style.display = 'none';
+          }, 1500);
+
+          world.onPointHover(point => {
+            if (point) {
+              tooltip.style.display = 'block';
+              tooltip.textContent = `${point.name} — ${point.capital}`;
+              tooltip.setAttribute('aria-hidden', 'false');
+              container.style.cursor = 'pointer';
+            } else {
+              tooltip.style.display = 'none';
+              tooltip.setAttribute('aria-hidden', 'true');
+              container.style.cursor = 'default';
+            }
+          });
+
+          world.onPointClick(country => {
+            if (!country) return;
+            currentCountry = country;
+            world.pointOfView({ lat: country.lat, lng: country.lng, altitude: 1.4 }, 1000);
+            renderCountryInfo(country);
+            if (controls) { controls.autoRotate = false; }
+            document.getElementById('autoRotateBtn').textContent = 'Запустить вращение';
+            document.getElementById('autoRotateBtn').setAttribute('aria-pressed', 'false');
+          });
+
+          document.getElementById('resetBtn').addEventListener('click', () => {
+            world.pointOfView({ lat: 20, lng: 0, altitude: 2.2 }, 1200);
+            countryInfoEl.innerHTML = '<p>Выберите страну на глобусе.</p>';
+            if (controls) { controls.autoRotate = true; }
+            document.getElementById('autoRotateBtn').textContent = 'Остановить вращение';
+            document.getElementById('autoRotateBtn').setAttribute('aria-pressed', 'true');
+          });
+
+          document.getElementById('autoRotateBtn').addEventListener('click', e => {
+            const pressed = e.currentTarget.getAttribute('aria-pressed') === 'true';
+            const next = !pressed;
+            if (controls) controls.autoRotate = next;
+            e.currentTarget.textContent = next ? 'Остановить вращение' : 'Запустить вращение';
+            e.currentTarget.setAttribute('aria-pressed', String(next));
+          });
+
+          container.addEventListener('mousemove', e => {
+            const rect = container.getBoundingClientRect();
+            tooltip.style.left = `${e.clientX - rect.left}px`;
+            tooltip.style.top = `${e.clientY - rect.top}px`;
+          });
+
+          world.pointOfView({ lat: 20, lng: 0, altitude: 2.2 }, 0);
+
+        } catch (error) {
+          console.error('Error initializing globe:', error);
+          loader.innerHTML = `<p style="color: white;">Ошибка загрузки: ${error.message}</p>`;
+        }
+      }
+
+      function renderCountryInfo(country) {
+        const completedGames = gameState.completedGames[country.name] || [];
+        
+        let gamesHTML = '';
+        country.games.forEach((game, index) => {
+          const isCompleted = completedGames.includes(index);
+          gamesHTML += `
+            <div class="game-panel">
+              <h4>${game.title} ${isCompleted ? '✓' : ''}</h4>
+              <p>Тип: ${game.type === 'quiz' ? 'Викторина' : 'Игра'}</p>
+              ${!isCompleted ? `
+                <button class="game-btn" data-game="${index}">Играть</button>
+              ` : `
+                <p>Игра завершена</p>
+              `}
+            </div>
+          `;
+        });
+        
+        countryInfoEl.innerHTML = `
+          <h3>${country.name}</h3>
+          <p><strong>Столица:</strong> ${country.capital}</p>
+          <p><strong>Население:</strong> ${country.population}</p>
+          <p><strong>Площадь:</strong> ${country.area}</p>
+          ${gamesHTML}
+        `;
+        
+        document.querySelectorAll('.game-btn').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const gameIndex = parseInt(this.dataset.game);
+            startGame(country, gameIndex);
+          });
+        });
+      }
+
+      function startGame(country, gameIndex) {
+        const game = country.games[gameIndex];
+        currentGame = game;
+        currentQuestionIndex = 0;
+        
+        if (game.type === 'quiz') {
+          showQuizQuestion();
+        }
+      }
+
+      function showQuizQuestion() {
+        if (!currentGame || currentQuestionIndex >= currentGame.questions.length) {
+          endGame();
+          return;
+        }
+        
+        const question = currentGame.questions[currentQuestionIndex];
+        quizQuestion.textContent = question.question;
+        quizOptions.innerHTML = '';
+        quizResult.textContent = '';
+        
+        question.options.forEach((option, index) => {
+          const optionEl = document.createElement('div');
+          optionEl.className = 'quiz-option';
+          optionEl.textContent = option;
+          optionEl.dataset.index = index;
+          optionEl.addEventListener('click', () => checkAnswer(index));
+          quizOptions.appendChild(optionEl);
+        });
+        
+        quizModal.style.display = 'block';
+      }
+
+      function checkAnswer(selectedIndex) {
+        const question = currentGame.questions[currentQuestionIndex];
+        const isCorrect = selectedIndex === question.answer;
+        
+        if (isCorrect) {
+          quizResult.textContent = 'Правильно! +' + question.points + ' очков';
+          quizResult.style.color = 'green';
+          
+          if (gameState.currentTeam) {
+            gameState.teams[gameState.currentTeam - 1].score += question.points;
+            updateScores();
+          }
+        } else {
+          quizResult.textContent = 'Неправильно! Правильный ответ: ' + question.options[question.answer];
+          quizResult.style.color = 'red';
+        }
+        
+        setTimeout(() => {
+          currentQuestionIndex++;
+          showQuizQuestion();
+        }, 2000);
+      }
+
+      function endGame() {
+        quizModal.style.display = 'none';
+        
+        if (!gameState.completedGames[currentCountry.name]) {
+          gameState.completedGames[currentCountry.name] = [];
+        }
+        gameState.completedGames[currentCountry.name].push(countries.findIndex(c => c.name === currentCountry.name));
+
+        renderCountryInfo(currentCountry);
+
+        const world = Globe.getInstance(container);
+        if (world) {
+          world.pointColor(d => {
+            const completed = gameState.completedGames[d.name] || [];
+            return completed.length > 0 ? '#10b981' : '#ff6b6b';
+          });
+        }
+      }
+
+      function updateScores() {
+        document.getElementById('team1Score').textContent = gameState.teams[0].score;
+        document.getElementById('team2Score').textContent = gameState.teams[1].score;
+        document.getElementById('team3Score').textContent = gameState.teams[2].score;
+      }
+
+      function assignTeams() {
+        const teamNumber = prompt("Выберите команду (1, 2 или 3):");
+        if (teamNumber && ['1', '2', '3'].includes(teamNumber)) {
+          gameState.currentTeam = parseInt(teamNumber);
+          alert(`Теперь играет команда ${gameState.currentTeam}`);
+        }
+      }
+
+      document.getElementById('closeQuiz').addEventListener('click', () => {
+        quizModal.style.display = 'none';
+      });
+
+      document.getElementById('assignTeamsBtn').addEventListener('click', assignTeams);
+
+      initGlobe();
+      updateScores();
+    });
+  </script>
+</body>
+</html>
