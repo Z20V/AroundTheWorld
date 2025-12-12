@@ -6,7 +6,7 @@
   <title>AroundTheWorld</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌍</text></svg>">
   <style>
-    :root{ --bg:#0b1020; --panel:#ffffff; --muted:#64748b; --accent:#0ea5a4; --team1:#3b82f6; --team2:#ef4444; --team3:#10b981 }
+    :root{ --bg:#0b1020; --panel:#ffffff; --muted:#64748b; --accent:#1f850b; --team1:#3b82f6; --team2:#ef4444; --team3:#10b981 }
     html,body{ height:100%; margin:0; font-family:Inter, Roboto, Arial, sans-serif; background:var(--bg); color:#0f1724 }
     .app{ display:flex; height:100vh; gap:16px; padding:16px; box-sizing:border-box }
     #globe{ flex:1; min-height:320px; border-radius:12px; overflow:hidden; position:relative; background:#081124 }
@@ -35,6 +35,11 @@
     .quiz-option{ padding:10px; border:2px solid #e2e8f0; border-radius:8px; cursor:pointer; text-align:center }
     .quiz-option:hover{ background:#f1f5f9 }
     .close-btn{ position:absolute; top:10px; right:10px; background:none; border:none; font-size:20px; cursor:pointer }
+    .timer{ font-size:24px; color:var(--accent); margin-bottom:10px }
+    .leaderboard{ margin-top:20px; padding:10px; background:#f1f5f9; border-radius:8px }
+    .leaderboard h4{ margin:0 0 8px 0 }
+    .leaderboard ul{ list-style:none; padding:0; margin:0 }
+    .leaderboard li{ display:flex; justify-content:space-between; margin-bottom:5px }
     @keyframes spin{ to{ transform:rotate(360deg) } }
     @media (max-width:900px){ .app{ flex-direction:column } #infoPanel{ width:100%; max-width:none } .teams-panel{ top:auto; bottom:16px; left:16px; right:16px } }
   </style>
@@ -77,10 +82,15 @@
   </div>
 
   <div class="quiz-modal" id="quizModal">
-    <button class="close-btn" id="closeQuiz">&times;</button>
+    <button class="close-btn" id="closeQuiz">×</button>
+    <div class="timer" id="quizTimer"></div>
     <h3 id="quizQuestion"></h3>
     <div class="quiz-options" id="quizOptions"></div>
     <div id="quizResult"></div>
+    <div class="leaderboard">
+      <h4>Лидерборд</h4>
+      <ul id="leaderboardList"></ul>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
@@ -217,9 +227,13 @@
       const quizQuestion = document.getElementById('quizQuestion');
       const quizOptions = document.getElementById('quizOptions');
       const quizResult = document.getElementById('quizResult');
+      const quizTimer = document.getElementById('quizTimer');
+      const leaderboardList = document.getElementById('leaderboardList');
       let currentCountry = null;
       let currentGame = null;
       let currentQuestionIndex = 0;
+      let quizInterval = null;
+      let quizTime = 10; // Время на вопрос в секундах
 
       const texturePaths = {
         globe: 'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg',
@@ -391,9 +405,28 @@
         });
         
         quizModal.style.display = 'block';
+        startQuizTimer();
+      }
+
+      function startQuizTimer() {
+        quizTime = 10;
+        quizInterval = setInterval(() => {
+          quizTime--;
+          quizTimer.textContent = `Время: ${quizTime} секунд`;
+          if (quizTime <= 0) {
+            clearInterval(quizInterval);
+            quizResult.textContent = 'Время вышло!';
+            quizResult.style.color = 'red';
+            setTimeout(() => {
+              currentQuestionIndex++;
+              showQuizQuestion();
+            }, 2000);
+          }
+        }, 1000);
       }
 
       function checkAnswer(selectedIndex) {
+        clearInterval(quizInterval);
         const question = currentGame.questions[currentQuestionIndex];
         const isCorrect = selectedIndex === question.answer;
         
@@ -439,6 +472,15 @@
         document.getElementById('team1Score').textContent = gameState.teams[0].score;
         document.getElementById('team2Score').textContent = gameState.teams[1].score;
         document.getElementById('team3Score').textContent = gameState.teams[2].score;
+        
+        // Обновление лидерборда
+        const sortedTeams = [...gameState.teams].sort((a, b) => b.score - a.score);
+        leaderboardList.innerHTML = '';
+        sortedTeams.forEach(team => {
+          const li = document.createElement('li');
+          li.textContent = `${team.name}: ${team.score} очков`;
+          leaderboardList.appendChild(li);
+        });
       }
 
       function assignTeams() {
